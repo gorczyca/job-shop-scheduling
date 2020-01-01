@@ -2,7 +2,8 @@ import csv
 
 from step import Step
 
-FILENAME = 'abz5.csv'
+# FILENAME = 'abz5.csv'
+FILENAME = 'example.csv'
 
 def readCsv(fileName):
     with open(fileName, newline='') as csvFile:
@@ -36,23 +37,53 @@ def fillQueues(queues, endings, steps):
     for step in steps:
         machineId = step.machineId
         jobId = step.jobId
+        lastJobStepEnding = endings[jobId]
         # todo: timeBefore
-        if not queues[step.machineId]:      # if queue doesn't contain any steps
-            step.start = endings[jobId]
-        else:
-            lastStep = queues[machineId][-1]  # take last element of the machine queue
-            if endings[jobId] <= lastStep.stop:
-                step.start = lastStep.stop
-            else: 
-                step.start = endings[jobId]
-        stepEnd = step.start + step.duration
-        step.stop = stepEnd
-        endings[jobId] = stepEnd
-        queues[machineId].append(step)
+
+        squeezed = False
+        for count, machineStep in enumerate(queues[machineId]):
+            if machineStep.start > lastJobStepEnding:
+                # if there is time before, squeeze it in
+                if machineStep.timeBefore >= step.duration: # if there is enough space
+                    if machineStep.start - step.duration >= lastJobStepEnding: # jeżeli mozna wpisać w ten slot tak by nie zaburzyć reszty
+                        if count == 0:
+                            step.start = 0
+                        else:                        
+                            previousMachineStep = queues[machineId][count - 1]
+                            if previousMachineStep.stop >= lastJobStepEnding:
+                                step.start = previousMachineStep.stop
+                            else:
+                                step.start = lastJobStepEnding
+
+                        step.stop = step.start + step.duration
+                        endings[jobId] = step.stop
+                        step.timeBefore = 0
+                        machineStep.timeBefore = machineStep.start - step.stop
+                        queues[machineId].insert(count, step)
+                        
+                        squeezed = True
+                        break
+
+        if not squeezed:
+            if not queues[machineId]:      # if queue doesn't contain any steps
+                step.start = lastJobStepEnding
+                step.timeBefore = step.start
+            else:
+                lastStep = queues[machineId][-1]  # take last element of the machine queue
+                if lastJobStepEnding <= lastStep.stop:
+                    step.start = lastStep.stop
+                else: 
+                    step.start = lastJobStepEnding
+                step.timeBefore = step.start - lastStep.stop
+
+            stepEnd = step.start + step.duration
+            step.stop = stepEnd
+            endings[jobId] = stepEnd
+            queues[machineId].append(step)
 
     for queue in queues:
         for step in queue:
-            print(f'{step.jobId}/{step.stepNo}: {step.start}-{step.stop}  ', end = '')
+            print(f'{step.jobId}/{step.stepNo}: {step.start}-{step.stop}, tb:{step.timeBefore}  ', end = '')
         print('')
 
     length = getOverallLength(endings)

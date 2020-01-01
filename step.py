@@ -1,6 +1,6 @@
 import math
 
-UNKNOWN = math.inf
+UNKNOWN = -math.inf
 
 class Step:
     def __init__(self, jobId, stepNo, machineId, duration, start=UNKNOWN, stop=UNKNOWN, freeTimeBefore=UNKNOWN):
