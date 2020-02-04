@@ -1,3 +1,8 @@
+"""Annealing class.
+
+Used to perform every simulated-annealing task.
+"""
+
 import math
 
 class Annealing:
@@ -19,25 +24,37 @@ class Annealing:
         }
 
     def __calculate_temperature(self):
+        """Returns the current temperature, using predefined temperature update option.
+        """
         update = self.__temperature_update_switcher.get(self.__temperature_update, lambda: 'Error')
         return max(self.__min_temperature, update())
         
     def __linear_temperature_update(self):
+        """Updates the temperature in the linear way.
+        """
         fraction = self.__current_iteration / self.__iterations_number
         subtractedTemperature = fraction * self.__initial_temperature
         return self.__initial_temperature - subtractedTemperature
         
     def __decay_temperature_update(self): 
-        decay_coefficient = self.__decay_constant ** self.__iteration
+        """Updates the temperature in the decay way.
+        """
+        decay_coefficient = self.__decay_constant ** self.__current_iteration
         return decay_coefficient * self.__initial_temperature
         
     def __gradual_temperature_update(self):
+        """Updates the temperature in the gradual way.
+        """
         gradual_coefficient = 1 - (self.__current_iteration / self.__gradual_constant_a) * self.__gradual_constant_n
         return gradual_coefficient * self.__initial_temperature
 
-    def calculate_probability(self, length, newLength):
+    def calculate_probability(self, length, new_length):
+        """Calculates probability based on the current temperature, length and new_length. 
+        """
         temperature = self.__calculate_temperature()
-        return math.exp(-(newLength - length)/temperature)
+        return math.exp(-(new_length - length)/temperature)
 
     def update_iteration(self):
+        """Increases the iteration counter by 1 after each iteration.
+        """
         self.__current_iteration += 1

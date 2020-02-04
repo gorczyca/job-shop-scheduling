@@ -3,9 +3,9 @@ import random
 import time
 import math
 import argparse
+import copy
 
-from graph import draw_chart
-
+from graphical_representation import draw_chart
 from step import Step
 from annealing import Annealing
 
@@ -13,187 +13,232 @@ from annealing import Annealing
 # TODO: other input representation to compare (DONE?)
 # TODO: neighbour function
 # TODO: temperature initialization, updation etc
-# TODO: graphic representation
+# TODO: graphic representation (DOnE)
 # TODO: github (readme) etc
+# TODO: clear code (DONE)
+# TODO: fix bug that elements are not sorted (DONE)
+# TODO: comment  functions (DONE)
 
 random.seed(time.clock())
 
-DEFAULT_FILENAME = 'testdata/1/abz5.csv'
+DEFAULT_ITERATIONS_NUMBER       = 100_000
+DEFAULT_INITIAL_TEMPERATURE     = 10
+DEFAULT_TEMPERATURE_UPDATE      = 'linear'
+DEFAULT_FILE_NAME               = 'testdata/1/abz7.csv'  
+DEFAULT_DECAY_CONSTANT          = 0.5
+DEFAULT_GRADUAL_CONSTANT_A      = 1000
+DEFAULT_GRADUAL_CONSTANT_N      = 2
 
 def get_cmd_arguments():
+    """Parses commandline arguments and provides help when used in shell.
 
+    Returns parsed arguments object.
+    """
     parser = argparse.ArgumentParser(description='Job Shop Scheduling Problem Solver.')
     
-    parser.add_argument('-fn', '--file_name', type=str, help='Input filename.', default=DEFAULT_FILENAME)
-    parser.add_argument('-it', '--initial_temperature', type=int, help='Initial temperature value. Default 10.', default=10)
+    parser.add_argument('-fn', '--file_name', type=str, help=f'Input filename. Default {DEFAULT_FILE_NAME}', default=DEFAULT_FILE_NAME)
+    parser.add_argument('-it', '--initial_temperature', type=int, help=f'Initial temperature value. Default {DEFAULT_INITIAL_TEMPERATURE}.', default=DEFAULT_INITIAL_TEMPERATURE)
     parser.add_argument('-tu', '--temperature_update', type=str, 
-                        help='Update of temperature. Possible values: linear, decay, gradual, Default: linear', default='linear')
-    parser.add_argument('-in', '--iterations_number', type=int, help='Number of iterations. Default 100_000.', default=100_000)
+                        help=f'Update of temperature. Possible values: linear, decay, gradual, Default: {DEFAULT_TEMPERATURE_UPDATE}', default=DEFAULT_TEMPERATURE_UPDATE)
+    parser.add_argument('-in', '--iterations_number', type=int, help=f'Number of iterations. Default {DEFAULT_ITERATIONS_NUMBER}.', default=DEFAULT_ITERATIONS_NUMBER)
     parser.add_argument('-dc', '--decay_constant', type=float, 
-                        help='Decay constant. Relevant if "temperature_update"="decay". Default 0.5', default=0.5)
+                        help=f'Decay constant. Relevant if "temperature_update"="decay". Default {DEFAULT_DECAY_CONSTANT}', default=DEFAULT_DECAY_CONSTANT)
     parser.add_argument('-gda', '--gradual_constant_a', type=int, 
-                        help='Gradual constant a. Relevant if "temperature_update"="gradual". Default 1000.', default=1000)
+                        help=f'Gradual constant a. Relevant if "temperature_update"="gradual". Default {DEFAULT_GRADUAL_CONSTANT_A}.', default=DEFAULT_GRADUAL_CONSTANT_A)
     parser.add_argument('-gcn', '--gradual_constant_n', type=float, 
-                        help='Gradual constant n. Relevant if "temperature_update"="gradual". Default 2.', default=2)
+                        help=f'Gradual constant n. Relevant if "temperature_update"="gradual". Default {DEFAULT_GRADUAL_CONSTANT_N}.', default=DEFAULT_GRADUAL_CONSTANT_N)
 
     return parser.parse_args()
 
-def _printQueues(queues):
-    maxLength = 0
-    for queue in queues:
+def print_queues(queues):
+    """Prints machine queues and max length.
+    Format:
+    M <machine_id>: <job_id>/<step_no>: <start>-<stop>, tb: <time_before>  
+    """
+    max_length = 0
+    for machine_id, queue in enumerate(queues):
+        print(f'M {machine_id}: ', end='')
         for step in queue:
-            if step.stop > maxLength:
-                maxLength = step.stop
-            print(f'{step.jobId}/{step.stepNo}: {step.start}-{step.stop}, tb:{step.timeBefore}  ', end = '')
+            if step.stop > max_length:
+                max_length = step.stop
+            print(f'{step.job_id}/{step.step_no}: {step.start}-{step.stop}, tb:{step.time_before}  ', end = '')
         print('')
 
-    print(f'Total length: {maxLength}')
+    print(f'Total length: {max_length}')
 
-def _getTotalLength(queues):
-    maxLength = 0
+def get_total_length(queues):
+    """Returns max (queue) length.
+    """
+    max_length = 0
     for queue in queues:
         for step in queue:
-            if step.stop > maxLength:
-                maxLength = step.stop
-    return maxLength
+            if step.stop > max_length:
+                max_length = step.stop
+    return max_length
 
-def _printJobs(jobs):
+def print_jobs(jobs):
+    """Prints jobs (used for comparison with the input file).
+    Format:
+    M: <machine_id> D: <duration>; <job_id>/<step_no>
+    """
     for job in jobs:
         for step in job:
-            print(f'M: {step.machineId} D: {step.duration}; {step.jobId}/{step.stepNo}\t', end='')
+            print(f'M: {step.machine_id} D: {step.duration}; {step.job_id}/{step.step_no}\t', end='')
         print('')
 
 def _contained(queue, step):
+    """True if queue contains step.
+    """
     for _step in queue:
-        if step.jobId == _step.jobId and step.stepNo == _step.stepNo:
+        if step.job_id == _step.job_id and step.step_no == _step.step_no:
             return True
     return False
 
-def _initializeQueues(machinesNo):
+def initialize_queues(machines_no):
+    """Initializes empty queues.
+    Returns empty queues.
+    """
     queues = []
-    for i in range(machinesNo):
+    for i in range(machines_no):
         queues.append([])
 
     return queues
 
-def _findStep(queues, jobId, stepNo):
+def find_step(queues, job_id, step_no):
+    """Finds step in queues given job_id and step_no.
+    Returns found step.
+    """
     for queue in queues:
         for step in queue:
-            if step.jobId == jobId and step.stepNo == stepNo:
+            if step.job_id == job_id and step.step_no == step_no:
                 return step
 
-def _findEnding(queues, jobId):
+def find_ending(queues, job_id):
+    """Finds the timepoint when job with given job_id ends.
+    Returns timepoint.
+    """
     ending = 0
     for queue in queues:
         for step in queue:
-            if step.jobId == jobId:
+            if step.job_id == job_id:
                 if ending < step.stop:
                     ending = step.stop
     
     return ending
 
-def _randomStep(queues, machinesNo):
-    machineId = random.randint(0, machinesNo - 1) # inclusive
-    machineStepsNo = len(queues[machineId])
-    stepNo = random.randint(0, machineStepsNo - 1)
-    return machineId, stepNo
+def random_step(queues, machines_no):
+    """Returns random step from the queues.
+    """
+    machine_id = random.randint(0, machines_no - 1) # inclusive
+    machineStepsNo = len(queues[machine_id])
+    step_no = random.randint(0, machineStepsNo - 1)
+    return machine_id, step_no
 
-def readCsv(fileName, printInfo=False):
-    with open(fileName, newline='') as csvFile:
-        reader = csv.reader(csvFile)    
+def read_csv(file_name, print_info=False):
+    """Reads data from input file (style 1).
+    Returns list of jobs, number of jobs, number of machines.
+    """
+    with open(file_name, newline='') as csv_file:
+        reader = csv.reader(csv_file)    
         dimensions = next(reader)[0].split()
-        jobsNo = int(dimensions[0])
-        machinesNo = int(dimensions[1])
+        jobs_no = int(dimensions[0])
+        machines_no = int(dimensions[1])
         jobs = []
-        for jobId, row in enumerate(reader):
+        for job_id, row in enumerate(reader):
             row = row[0].split()
             jobs.append([]) 
 
             # number of steps matches number of machines
-            for i in range(machinesNo):
-                machineId = int(row[2 * (i+1) - 2])
+            for i in range(machines_no):
+                machine_id = int(row[2 * (i+1) - 2])
                 duration = int(row[2 * (i+1) - 1])
-                step = Step(jobId, i, machineId, duration)
-                jobs[jobId].append(step) 
+                step = Step(job_id, i, machine_id, duration)
+                jobs[job_id].append(step) 
         
-        if printInfo:
-            _printJobs(jobs)
+        if print_info:
+            print_jobs(jobs)
 
-        return jobs, jobsNo, machinesNo
+        return jobs, jobs_no, machines_no
 
-def readCsv2(fileName, printInfo=False):
-    with open(fileName, newline='') as csvFile:
-        reader = csv.reader(csvFile)    
+def read_csv_2(file_name, print_info=False):
+    """Reads data from input file (style 1).
+    Returns list of jobs, number of jobs, number of machines.
+    """
+    with open(file_name, newline='') as csv_file:
+        reader = csv.reader(csv_file)    
         dimensions = next(reader)[0].split()
-        jobsNo = int(dimensions[0])
-        machinesNo = int(dimensions[1])
+        jobs_no = int(dimensions[0])
+        machines_no = int(dimensions[1])
         # skip the 'Times' string
         next(reader)
         jobs = []
 
-        for jobId in range(jobsNo):
+        for job_id in range(jobs_no):
             jobs.append([])
-            jobTimes = next(reader)[0].split()
+            job_times = next(reader)[0].split()
             
-            for stepNo, jobTime in enumerate(jobTimes):
-                step = Step(jobId, stepNo, math.inf, int(jobTime))
-                jobs[jobId].append(step)
+            for step_no, job_time in enumerate(job_times):
+                step = Step(job_id, step_no, math.inf, int(job_time))
+                jobs[job_id].append(step)
 
         # skip the 'Machines' string 
         next(reader)
-        for jobId in range(jobsNo):
-            jobMachines = next(reader)[0].split()
+        for job_id in range(jobs_no):
+            job_machines = next(reader)[0].split()
 
-            for stepNo, stepMachineId in enumerate(jobMachines):
-                jobs[jobId][stepNo].machineId = int(stepMachineId) - 1 # cause they are encoded from 1
+            for step_no, step_machine_id in enumerate(job_machines):
+                jobs[job_id][step_no].machine_id = int(step_machine_id) - 1 # cause they are encoded from 1
         
-        if printInfo:
-            _printJobs(jobs)
+        if print_info:
+            print_jobs(jobs)
 
-        return jobs, jobsNo, machinesNo
+        return jobs, jobs_no, machines_no
 
-def fillMachineQueues(jobs, queues, single_time_unit_width=0, draw=False):
+def fill_machine_queues(jobs, queues, single_time_unit_width=0, draw=False):
+    """Fills the queues with the remaining steps.
+    Queues can be already containing some steps. Only those who are not already in queues are added.
+    Returns queues filled with all the jobs.
+    """
     # queues can be already filled partially
     for job in jobs:
         for step in job:
             
             # if it's already contained, don't consider it anymore
-            # print(f'MACHINE ID: {step.machineId}')
-            # print(f'QUEUES LENGTH: {len(queues)}')
-            if _contained(queues[step.machineId], step):
+            if _contained(queues[step.machine_id], step):
                 continue            
             
+            step_copy = step.copy()
+
             squeezed = False
-            jobEnding = _findEnding(queues, step.jobId)
+            job_ending = find_ending(queues, step_copy.job_id)
 
             # the previous step of the job ended before the machine is free
             # try to squeeze it
-            ##### trying to squeeze ####
-            for count, _step in enumerate(queues[step.machineId]):
-                if _step.start > jobEnding:
+            for count, _step in enumerate(queues[step.machine_id]):
+                if _step.start > job_ending:
                     # take the first that starts after job ending
-                    if _step.timeBefore >= step.duration: 
+                    if _step.time_before >= step_copy.duration: 
                         # if there is enough space
-                        if _step.start - step.duration >= jobEnding:
+                        if _step.start - step_copy.duration >= job_ending:
                             # it is possible to squeeze
 
                             squeezed = True
 
                             if count == 0:
-                                step.start = jobEnding
-                                step.timeBefore = jobEnding
+                                step_copy.start = job_ending
+                                step_copy.time_before = job_ending
                             else:                        
-                                _previousStep = queues[step.machineId][count - 1]
-                                if _previousStep.stop >= jobEnding:
-                                    step.start = _previousStep.stop
-                                    step.timeBefore = 0
+                                _previous_step = queues[step.machine_id][count - 1]
+                                if _previous_step.stop >= job_ending:
+                                    step_copy.start = _previous_step.stop
+                                    step_copy.time_before = 0
                                 else:
-                                    step.start = jobEnding
-                                    step.timeBefore = step.start - _previousStep.stop
+                                    step_copy.start = job_ending
+                                    step_copy.time_before = step_copy.start - _previous_step.stop
 
-                            step.stop = step.start + step.duration
-                            _step.timeBefore = _step.start - step.stop
-                            queues[step.machineId].insert(count, step)
+                            step_copy.stop = step_copy.start + step_copy.duration
+                            _step.time_before = _step.start - step_copy.stop # TODO: tu powinny być kopie więc powinienem móc na czillu updateowac
+                            queues[step.machine_id].insert(count, step_copy)
                             break            
 
             if not squeezed:
@@ -201,73 +246,73 @@ def fillMachineQueues(jobs, queues, single_time_unit_width=0, draw=False):
                 #           or
                 # if it is free when the previous job ends
                 # or it failed to squeeze
-                if not queues[step.machineId]:
-                    step.start = jobEnding
-                    step.timeBefore = jobEnding
+                if not queues[step_copy.machine_id]:
+                    step_copy.start = job_ending
+                    step_copy.time_before = job_ending
                 else: 
-                    if queues[step.machineId][-1].stop <= jobEnding:
-                        step.start = jobEnding
-                        step.timeBefore = jobEnding - queues[step.machineId][-1].stop
+                    if queues[step_copy.machine_id][-1].stop <= job_ending:
+                        step_copy.start = job_ending
+                        step_copy.time_before = job_ending - queues[step_copy.machine_id][-1].stop
                     else:
-                        step.start = queues[step.machineId][-1].stop
-                        step.timeBefore = 0
+                        step_copy.start = queues[step_copy.machine_id][-1].stop
+                        step_copy.time_before = 0
 
-                step.stop = step.start + step.duration
-                queues[step.machineId].append(step)
-            if draw:
-                length = _getTotalLength(queues)
-                draw_chart(queues, machinesNo, jobsNo, length, single_time_unit_width=single_time_unit_width)
+                step_copy.stop = step_copy.start + step_copy.duration
+                queues[step.machine_id].append(step_copy)
 
     return queues
 
-def generateNeighbour(queues, machinesNo, jobs, printInfo=False, single_time_unit_width=0):
+def generate_neighbour(queues, machines_no, jobs, print_info=False, single_time_unit_width=0):
+    """Generates neighbour given schedule.
+    Returns neighbour (neighbouring solution).
+    """
+
+    machine_id, step_no = random_step(queues, machines_no)
+
     # move it as much to the left as possible
-    machineId, stepNo = _randomStep(queues, machinesNo)
+    step = queues[machine_id][step_no]    
+    new_queues = initialize_queues(machines_no)
 
-    print(f'Trying to push M: {machineId}, StepNo: {stepNo}')
-
-    step = queues[machineId][stepNo]
-    
-    newQueues = _initializeQueues(machinesNo)
-
-    if step.stepNo == 0:
+    if step.step_no == 0:
         # if this is the first step to do, just put it on the beginning
-        step.timeBefore = 0
-        step.start = 0
-        step.stop = step.start + step.duration
-        newQueues[machineId].append(step)
+        new_step = step.copy()
+        new_step.time_before = 0
+        new_step.start = 0
+        new_step.stop = new_step.start + new_step.duration
+        new_queues[machine_id].append(new_step)
 
     else: 
-        previousStep = _findStep(queues, step.jobId, step.stepNo - 1)
-        machineEnding = 0
-        # preserve all the steps that end maximally at the time previousStep.stop
-        for _machineId, queue in enumerate(queues):
+        previous_step = find_step(queues, step.job_id, step.step_no - 1)
+
+        # preserve all the steps that end maximally at the time previous_step.stop
+        for _machine_id, queue in enumerate(queues):
             for _step in queue:
-                if _step.stop <= previousStep.stop:
-                    newQueues[_machineId].append(_step)
+                if _step.stop <= previous_step.stop:
+                    new_queues[_machine_id].append(_step.copy())
 
-                    # save the ending on this machine
-                    if _machineId == machineId:
-                        if machineEnding < _step.stop:
-                            machineEnding = _step.stop
-        
+        machine_ending = 0
+        if new_queues[machine_id]:
+            machine_ending = new_queues[machine_id][-1].stop
+
         # put step right when the previous is finished
-        step.start = previousStep.stop
-        step.timeBefore = previousStep.stop - machineEnding
-        step.stop = step.start + step.duration
+        step_copy = step.copy()
+        step_copy.start = previous_step.stop
+        step_copy.time_before = step_copy.start - machine_ending
+        step_copy.stop = step_copy.start + step_copy.duration
 
-        newQueues[machineId].append(step)
+        new_queues[machine_id].append(step_copy)
 
-        # draw_chart(newQueues, machinesNo, jobsNo, length, single_time_unit_width=single_time_unit_width)
+        new_queues_length = get_total_length(new_queues)
+        final_queues_length = get_total_length(queues)
 
-    return fillMachineQueues(jobs, newQueues, single_time_unit_width=single_time_unit_width, draw=False)
+    return fill_machine_queues(jobs, new_queues, single_time_unit_width=single_time_unit_width, draw=False)
 
 
 if __name__ == '__main__':
 
     jobs = []
-    jobsNo = 0
-    machinesNo = 0
+    jobs_no = 0
+    machines_no = 0
 
     args = get_cmd_arguments()
 
@@ -279,56 +324,48 @@ if __name__ == '__main__':
                             gradual_constant_n=args.gradual_constant_n)
 
     if args.file_name.split('/')[1] == '1':
-        jobs, jobsNo, machinesNo = readCsv(args.file_name)
+        jobs, jobs_no, machines_no = read_csv(args.file_name)
     else:
-        jobs, jobsNo, machinesNo = readCsv2(args.file_name)
+        jobs, jobs_no, machines_no = read_csv_2(args.file_name)
 
 
-    initialQueues = _initializeQueues(machinesNo)
+    initial_queues = initialize_queues(machines_no)
 
-    queues = fillMachineQueues(jobs, initialQueues)
-    length = _getTotalLength(queues)
-    # _printQueues(queues)
-    single_time_unit_width = draw_chart(queues, machinesNo, jobsNo, length)
-
-
+    queues = fill_machine_queues(jobs, initial_queues)
+    length = get_total_length(queues)
+    single_time_unit_width = draw_chart(queues, machines_no, jobs_no, length, 
+                                        name=f'Initial schedule - Length = {length}')
 
     print(f'Initial length: {length}')
 
     for step in range(args.iterations_number):
 
-        newQueues = generateNeighbour(queues, machinesNo, jobs, printInfo=True, single_time_unit_width=single_time_unit_width)
-        newLength = _getTotalLength(newQueues)
+        new_queues = generate_neighbour(queues, machines_no, jobs, print_info=True, 
+                                        single_time_unit_width=single_time_unit_width)
+     
+        new_length = get_total_length(new_queues)
+      
+        if length > new_length:
+            print(f'A better solution found with length: {new_length}\r')
+            length = new_length
+            queues = new_queues
 
-        if newLength <= length :
-            # if current solution is better, accept it
-            queues = newQueues
-            if length > newLength:
-                print(f'A better solution found with length: {newLength}\r')
-                # TODO: temporary
-                draw_chart(queues, machinesNo, jobsNo, length, single_time_unit_width=single_time_unit_width)
+        elif new_length > length: 
 
-            length = newLength
-        else:
-
-            # accept the solution, based on probability
-            probability = annealing.calculate_probability(length, newLength)
+            probability = annealing.calculate_probability(length, new_length)
             if probability > random.random():
-                # also accept it
-                
+                # also accept it                
                 print(f'Accepted worse solution with the probability of {probability}\r')
-                print(f'New length is: {newLength}\r')
+                print(f'New length is: {new_length}\r')
 
-                queues = newQueues
-                length = newLength
-
-                 # TODO: temporary
-                draw_chart(queues, machinesNo, jobsNo, length, single_time_unit_width=single_time_unit_width)
+                queues = new_queues
+                length = new_length
 
         annealing.update_iteration()
         print(f'{step} of {args.iterations_number}', end='\r', flush=True)
+    
     print('Simulation ended.')
     print(f'Final length is: {length}')
-    
-    draw_chart(queues, machinesNo, jobsNo, length, single_time_unit_width=single_time_unit_width)
 
+    print_queues(queues)
+    draw_chart(queues, machines_no, jobs_no, length, name=f'Final schedule - Length = {length}', single_time_unit_width=single_time_unit_width)
