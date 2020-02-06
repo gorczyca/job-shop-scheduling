@@ -9,24 +9,14 @@ from graphical_representation import draw_chart
 from step import Step
 from annealing import Annealing
 
-# TODO: commandline arguments (Done)
-# TODO: other input representation to compare (DONE?)
-# TODO: neighbour function
-# TODO: temperature initialization, updation etc
-# TODO: graphic representation (DOnE)
-# TODO: github (readme) etc
-# TODO: clear code (DONE)
-# TODO: fix bug that elements are not sorted (DONE)
-# TODO: comment  functions (DONE)
-
 random.seed(time.clock())
 
-DEFAULT_ITERATIONS_NUMBER       = 100_000
-DEFAULT_INITIAL_TEMPERATURE     = 10
+DEFAULT_ITERATIONS_NUMBER       = 50_000
+DEFAULT_INITIAL_TEMPERATURE     = 50
 DEFAULT_TEMPERATURE_UPDATE      = 'linear'
-DEFAULT_FILE_NAME               = 'testdata/1/abz7.csv'  
-DEFAULT_DECAY_CONSTANT          = 0.5
-DEFAULT_GRADUAL_CONSTANT_A      = 1000
+DEFAULT_FILE_NAME               = 'testdata/2/tai15x15_1.csv'  
+DEFAULT_DECAY_CONSTANT          = 0.8
+DEFAULT_GRADUAL_CONSTANT_A      = 30_000
 DEFAULT_GRADUAL_CONSTANT_N      = 2
 
 def get_cmd_arguments():
@@ -194,7 +184,7 @@ def read_csv_2(file_name, print_info=False):
 
         return jobs, jobs_no, machines_no
 
-def fill_machine_queues(jobs, queues, single_time_unit_width=0, draw=False):
+def fill_machine_queues(jobs, queues, single_time_unit_width=0):
     """Fills the queues with the remaining steps.
     Queues can be already containing some steps. Only those who are not already in queues are added.
     Returns queues filled with all the jobs.
@@ -262,7 +252,7 @@ def fill_machine_queues(jobs, queues, single_time_unit_width=0, draw=False):
 
     return queues
 
-def generate_neighbour(queues, machines_no, jobs, print_info=False, single_time_unit_width=0):
+def generate_neighbour(queues, machines_no, jobs, single_time_unit_width=0):
     """Generates neighbour given schedule.
     Returns neighbour (neighbouring solution).
     """
@@ -305,7 +295,7 @@ def generate_neighbour(queues, machines_no, jobs, print_info=False, single_time_
         new_queues_length = get_total_length(new_queues)
         final_queues_length = get_total_length(queues)
 
-    return fill_machine_queues(jobs, new_queues, single_time_unit_width=single_time_unit_width, draw=False)
+    return fill_machine_queues(jobs, new_queues, single_time_unit_width=single_time_unit_width)
 
 
 if __name__ == '__main__':
@@ -340,8 +330,7 @@ if __name__ == '__main__':
 
     for step in range(args.iterations_number):
 
-        new_queues = generate_neighbour(queues, machines_no, jobs, print_info=True, 
-                                        single_time_unit_width=single_time_unit_width)
+        new_queues = generate_neighbour(queues, machines_no, jobs, single_time_unit_width=single_time_unit_width)
      
         new_length = get_total_length(new_queues)
       
@@ -367,5 +356,5 @@ if __name__ == '__main__':
     print('Simulation ended.')
     print(f'Final length is: {length}')
 
-    print_queues(queues)
+    # print_queues(queues)
     draw_chart(queues, machines_no, jobs_no, length, name=f'Final schedule - Length = {length}', single_time_unit_width=single_time_unit_width)

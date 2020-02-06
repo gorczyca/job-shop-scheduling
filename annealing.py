@@ -45,7 +45,7 @@ class Annealing:
     def __gradual_temperature_update(self):
         """Updates the temperature in the gradual way.
         """
-        gradual_coefficient = 1 - (self.__current_iteration / self.__gradual_constant_a) * self.__gradual_constant_n
+        gradual_coefficient = 1 - (self.__current_iteration / self.__gradual_constant_a) ** self.__gradual_constant_n
         return gradual_coefficient * self.__initial_temperature
 
     def calculate_probability(self, length, new_length):

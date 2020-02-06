@@ -8,7 +8,7 @@ from graphics import *
 WINDOW_DIM_X = 1920
 WINDOW_DIM_Y = 1080
 
-FONT_SIZE = 20
+FONT_SIZE = 15
 
 TRANSPARENT = 'black'
 MACHINE_LABEL_COLOUR = 'white'
@@ -17,7 +17,7 @@ STEP_LABEL_COLOUR = 'black'
 COLORS = [  'white',        # 1
             'red',          # 2
             'yellow',       # 3
-            'blue',         # 4
+            'darkkhaki',    # 4
             'pink',         # 5
             'purple',       # 6 
             'green',        # 7     
@@ -30,12 +30,14 @@ COLORS = [  'white',        # 1
             'gold',         # 14
             'silver',       # 15
             'greenyellow',  # 16
-            'darkkhaki',    # 17
+            'blue',    # 17
             'firebrick',    # 18
             'darkcyan',     # 19
             'coral',        # 20
             'indigo'        # 21
 ]
+
+COLORS_NO = len(COLORS)
 
 def draw_chart(queues, machines_no, jobs_no, length, labels=False, single_time_unit_width=0, name=''):
     """Draws chart as the graphical interpretation.
@@ -77,7 +79,7 @@ def draw_chart(queues, machines_no, jobs_no, length, labels=False, single_time_u
             next_step_end = previous_step_end + rect_width
             rect = Rectangle(Point(previous_step_end, starting_point_top),
                                 Point(next_step_end, ending_point_bottom))
-            rect.setFill(COLORS[step.job_id])
+            rect.setFill(COLORS[step.job_id % COLORS_NO])
             rect.draw(win)
 
             label = Text(rect.getCenter(), f'{step.job_id}/{step.step_no}')
@@ -87,7 +89,8 @@ def draw_chart(queues, machines_no, jobs_no, length, labels=False, single_time_u
 
             previous_step_end = next_step_end
 
-    win.getMouse()
-    win.close()
-
-    return single_time_unit_width
+    try:
+        win.getMouse()
+        win.close()
+    finally:
+        return single_time_unit_width
